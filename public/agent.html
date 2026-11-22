@@ -1,0 +1,1167 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OSCC Mock Agent Console</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    body {
+      background-color: #0f172a;
+      color: #f8fafc;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    header {
+      background-color: #1e293b;
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #334155;
+    }
+
+    header h1 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #38bdf8;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .badge {
+      font-size: 0.75rem;
+      padding: 3px 8px;
+      border-radius: 9999px;
+      font-weight: 600;
+    }
+
+    .badge-connected {
+      background-color: #065f46;
+      color: #34d399;
+    }
+
+    .badge-disconnected {
+      background-color: #7f1d1d;
+      color: #f87171;
+    }
+
+    .main-container {
+      display: flex;
+      flex: 1;
+      height: calc(100vh - 53px);
+    }
+
+    /* Left panel: Session list */
+    .sidebar {
+      width: 320px;
+      border-right: 1px solid #334155;
+      background-color: #1e293b;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .sidebar-header {
+      padding: 14px 16px;
+      border-bottom: 1px solid #334155;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: #94a3b8;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .session-list {
+      flex: 1;
+      overflow-y: auto;
+      list-style: none;
+    }
+
+    .session-item {
+      padding: 14px 16px;
+      border-bottom: 1px solid #334155;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .session-item:hover {
+      background-color: #334155;
+    }
+
+    .session-item.active {
+      background-color: #2563eb;
+    }
+
+    .session-item-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+
+    .session-customer-name {
+      font-weight: 600;
+      font-size: 0.95rem;
+      color: #f8fafc;
+    }
+
+    .session-last-msg {
+      font-size: 0.8rem;
+      color: #94a3b8;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .session-item.active .session-last-msg {
+      color: #e2e8f0;
+    }
+
+    .no-sessions {
+      padding: 24px;
+      text-align: center;
+      color: #64748b;
+      font-size: 0.85rem;
+    }
+
+    /* Right panel: Chat area */
+    .chat-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background-color: #0f172a;
+    }
+
+    .chat-header {
+      padding: 14px 20px;
+      background-color: #1e293b;
+      border-bottom: 1px solid #334155;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .chat-header-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .chat-customer-title {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #f8fafc;
+    }
+
+    .chat-session-id {
+      font-size: 0.75rem;
+      color: #64748b;
+    }
+
+    .btn-disconnect {
+      background-color: #dc2626;
+      color: #ffffff;
+      border: none;
+      padding: 6px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 500;
+      font-size: 0.85rem;
+      transition: background 0.2s;
+    }
+
+    .btn-disconnect:hover {
+      background-color: #b91c1c;
+    }
+
+    .btn-disconnect:disabled {
+      background-color: #475569;
+      cursor: not-allowed;
+    }
+
+    .messages-area {
+      flex: 1;
+      padding: 20px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .message-row {
+      display: flex;
+      width: 100%;
+    }
+
+    .message-row.customer {
+      justify-content: flex-start;
+    }
+
+    .message-row.agent {
+      justify-content: flex-end;
+    }
+
+    .message-row.system {
+      justify-content: center;
+    }
+
+    .message-row.customer>div {
+      max-width: 70%;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    .message-row.agent>div {
+      max-width: 70%;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+    }
+
+    .bubble {
+      width: fit-content;
+      max-width: 100%;
+      padding: 10px 14px;
+      border-radius: 12px;
+      font-size: 0.9rem;
+      line-height: 1.4;
+      word-break: break-word;
+    }
+
+    .bubble.customer {
+      background-color: #334155;
+      color: #f8fafc;
+      border-bottom-left-radius: 2px;
+    }
+
+    .bubble.agent {
+      background-color: #2563eb;
+      color: #ffffff;
+      border-bottom-right-radius: 2px;
+    }
+
+    .bubble.system {
+      background-color: #1e293b;
+      color: #94a3b8;
+      font-size: 0.8rem;
+      border: 1px dashed #475569;
+      text-align: center;
+      max-width: 80%;
+    }
+
+    .message-sender {
+      font-size: 0.7rem;
+      color: #94a3b8;
+      margin-bottom: 4px;
+      font-weight: 500;
+    }
+
+    .message-row.agent .message-sender {
+      text-align: right;
+      color: #93c5fd;
+    }
+
+    .typing-indicator {
+      padding: 6px 20px;
+      font-size: 0.85rem;
+      color: #38bdf8;
+      font-style: italic;
+      min-height: 32px;
+    }
+
+    .input-area {
+      padding: 14px 20px;
+      background-color: #1e293b;
+      border-top: 1px solid #334155;
+      display: flex;
+      gap: 10px;
+    }
+
+    .input-area input {
+      flex: 1;
+      padding: 10px 14px;
+      background-color: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 6px;
+      color: #f8fafc;
+      font-size: 0.9rem;
+      outline: none;
+    }
+
+    .input-area input:focus {
+      border-color: #38bdf8;
+    }
+
+    .btn-send {
+      background-color: #0284c7;
+      color: #ffffff;
+      border: none;
+      padding: 10px 18px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.9rem;
+      transition: background 0.2s;
+    }
+
+    .btn-send:hover {
+      background-color: #0369a1;
+    }
+
+    .btn-push-url {
+      background-color: #0f766e;
+      color: #ffffff;
+      border: none;
+      padding: 10px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.9rem;
+      transition: background 0.2s;
+      white-space: nowrap;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .btn-push-url:hover {
+      background-color: #0d9488;
+    }
+
+    .btn-push-url:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .placeholder-state {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #64748b;
+      font-size: 0.95rem;
+    }
+
+    /* Modal Dialogs */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.2s ease, visibility 0.2s ease;
+    }
+
+    .modal-overlay.active {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .modal-card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 14px;
+      width: 90%;
+      max-width: 480px;
+      padding: 24px;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
+      transform: scale(0.95);
+      transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .modal-overlay.active .modal-card {
+      transform: scale(1);
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    .modal-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #f8fafc;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .modal-close-btn {
+      background: transparent;
+      border: none;
+      color: #94a3b8;
+      font-size: 1.35rem;
+      cursor: pointer;
+      padding: 2px 8px;
+      border-radius: 6px;
+      line-height: 1;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .modal-close-btn:hover {
+      background: #334155;
+      color: #f8fafc;
+    }
+
+    .modal-body {
+      margin-bottom: 24px;
+      color: #cbd5e1;
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+
+    .modal-input {
+      width: 100%;
+      padding: 11px 14px;
+      background-color: #0f172a;
+      border: 1px solid #475569;
+      border-radius: 8px;
+      color: #f8fafc;
+      font-size: 0.95rem;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      margin-top: 8px;
+    }
+
+    .modal-input:focus {
+      border-color: #38bdf8;
+      box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2);
+    }
+
+    .quick-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .quick-link-chip {
+      font-size: 0.75rem;
+      background: #334155;
+      color: #38bdf8;
+      padding: 6px 12px;
+      border-radius: 20px;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.15s ease;
+      user-select: none;
+    }
+
+    .quick-link-chip:hover {
+      background: #475569;
+      border-color: #38bdf8;
+      color: #ffffff;
+      transform: translateY(-1px);
+    }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+    }
+
+    .btn-modal-cancel {
+      background: #334155;
+      color: #cbd5e1;
+      border: none;
+      padding: 10px 18px;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .btn-modal-cancel:hover {
+      background: #475569;
+      color: #f8fafc;
+    }
+
+    .btn-modal-confirm-push {
+      background: #0f766e;
+      color: #ffffff;
+      border: none;
+      padding: 10px 22px;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-modal-confirm-push:hover {
+      background: #0d9488;
+    }
+
+    .btn-modal-confirm-push:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .btn-modal-confirm-disconnect {
+      background: #dc2626;
+      color: #ffffff;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .btn-modal-confirm-disconnect:hover {
+      background: #b91c1c;
+    }
+
+    .btn-modal-confirm-disconnect:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    /* Floating Toast Notifications */
+    .toast-container {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 2000;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      pointer-events: none;
+    }
+
+    .toast {
+      pointer-events: auto;
+      min-width: 280px;
+      max-width: 380px;
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      animation: toastSlideIn 0.25s ease forwards;
+      transition: opacity 0.3s ease, transform 0.3s ease;
+    }
+
+    @keyframes toastSlideIn {
+      from {
+        opacity: 0;
+        transform: translateX(100%);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+
+    .toast.toast-success {
+      background: #064e3b;
+      border: 1px solid #059669;
+      color: #6ee7b7;
+    }
+
+    .toast.toast-error {
+      background: #7f1d1d;
+      border: 1px solid #dc2626;
+      color: #fca5a5;
+    }
+
+    .toast.toast-info {
+      background: #1e3a8a;
+      border: 1px solid #2563eb;
+      color: #93c5fd;
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    <h1>OSCC Mock Agent Console</h1>
+    <div id="headerStatus" style="font-size: 0.8rem; color: #94a3b8;">Auto-refreshing every 2s</div>
+  </header>
+
+  <div class="main-container">
+    <!-- Sidebar: Session list -->
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <span>Active Sessions</span>
+        <span id="sessionCount"
+          style="font-size: 0.8rem; background: #334155; padding: 2px 6px; border-radius: 4px;">0</span>
+      </div>
+      <ul class="session-list" id="sessionList">
+        <li class="no-sessions">No active sessions</li>
+      </ul>
+    </div>
+
+    <!-- Chat container -->
+    <div class="chat-container" id="chatContainer">
+      <div class="placeholder-state" id="emptyState">
+        Select a session from the left panel to begin chatting
+      </div>
+
+      <div id="activeChat" style="display: none; flex-direction: column; height: 100%;">
+        <div class="chat-header">
+          <div class="chat-header-info">
+            <div>
+              <div class="chat-customer-title" id="chatCustomerName">-</div>
+              <div class="chat-session-id" id="chatSessionId">-</div>
+            </div>
+            <span class="badge" id="chatStatusBadge">Connected</span>
+          </div>
+          <button class="btn-disconnect" id="btnDisconnect" onclick="disconnectCurrentSession()">Disconnect</button>
+        </div>
+
+        <div class="messages-area" id="messagesArea"></div>
+        <div class="typing-indicator" id="typingIndicator"></div>
+
+        <div class="input-area">
+          <input type="text" id="agentInput" placeholder="Type a message as agent..."
+            onkeydown="handleInputKeyDown(event)" oninput="handleAgentTyping()" autocomplete="off" />
+          <button class="btn-send" id="btnSend" onclick="sendAgentMessage()">Send</button>
+          <button class="btn-push-url" id="btnPushUrl" onclick="pushAgentUrl()" title="Push a URL to the customer">🔗
+            Push URL</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Push URL Modal Dialog -->
+  <div class="modal-overlay" id="pushUrlModal" onclick="handleBackdropClick(event, 'pushUrlModal')">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title">
+          <span>🔗</span>
+          <span>Push URL to Customer</span>
+        </div>
+        <button class="modal-close-btn" onclick="closePushUrlModal()" title="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="margin-bottom: 10px; color: #94a3b8; font-size: 0.85rem;">
+          Send an interactive link directly to the customer's chat screen.
+        </p>
+        <label for="pushUrlInput"
+          style="font-size: 0.75rem; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px;">Customer
+          Target URL</label>
+        <input type="text" id="pushUrlInput" class="modal-input" placeholder="https://hopegas.com/bill-pay"
+          autocomplete="off" onkeydown="handlePushUrlKeyDown(event)" />
+
+        <div style="margin-top: 14px;">
+          <div style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 6px; font-weight: 500;">Quick Suggestions:
+          </div>
+          <div class="quick-links">
+            <span class="quick-link-chip" onclick="setPushUrl('https://hopegas.com/bill-pay')">💳 Bill Pay</span>
+            <span class="quick-link-chip" onclick="setPushUrl('https://staging.hopegas.com/')">🌐 Hope Gas Home</span>
+            <span class="quick-link-chip" onclick="setPushUrl('https://hopegas.com/contact-us')">📞 Contact Us</span>
+            <span class="quick-link-chip" onclick="setPushUrl('https://hopegas.com/outage-center')">⚠️ Outage
+              Center</span>
+          </div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-modal-cancel" onclick="closePushUrlModal()">Cancel</button>
+        <button class="btn-modal-confirm-push" id="btnConfirmPush" onclick="confirmPushUrl()">
+          <span>🔗</span> Push URL
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Disconnect Confirmation Modal Dialog -->
+  <div class="modal-overlay" id="disconnectModal" onclick="handleBackdropClick(event, 'disconnectModal')">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title" style="color: #f87171;">
+          <span>⚠️</span>
+          <span>Disconnect Session</span>
+        </div>
+        <button class="modal-close-btn" onclick="closeDisconnectModal()" title="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 0.95rem; color: #f1f5f9; margin-bottom: 8px;">
+          Are you sure you want to disconnect from <strong id="disconnectCustomerName"
+            style="color: #38bdf8;">Customer</strong>?
+        </p>
+        <p style="font-size: 0.85rem; color: #94a3b8;">
+          This will notify the customer that the agent has ended the session and close the live chat.
+        </p>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-modal-cancel" onclick="closeDisconnectModal()">Keep Session</button>
+        <button class="btn-modal-confirm-disconnect" id="btnConfirmDisconnect" onclick="confirmDisconnect()">
+          Disconnect
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let activeSessionId = null;
+    let typingTimer = null;
+    let lastTypingPostTime = 0;
+
+    // Toast Notification helper
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toastContainer');
+      if (!container) return;
+      const toast = document.createElement('div');
+      toast.className = `toast toast-${type}`;
+
+      let icon = 'ℹ️';
+      if (type === 'success') icon = '✅';
+      if (type === 'error') icon = '❌';
+
+      toast.innerHTML = `<span>${icon}</span><span style="flex: 1;">${escapeHtml(message)}</span>`;
+      container.appendChild(toast);
+
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(-10px)';
+        setTimeout(() => toast.remove(), 300);
+      }, 3500);
+    }
+
+    function handleBackdropClick(event, modalId) {
+      if (event.target.id === modalId) {
+        if (modalId === 'pushUrlModal') closePushUrlModal();
+        if (modalId === 'disconnectModal') closeDisconnectModal();
+      }
+    }
+
+    function sendAgentTyping(sessionId, isTyping) {
+      if (!sessionId) return;
+      fetch(`/mock/sessions/${sessionId}/agent-typing`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isTyping: isTyping, firstName: 'Agent', lastName: 'One' })
+      }).catch(() => { });
+    }
+
+    // Fetch session list every 2 seconds
+    async function fetchSessions() {
+      try {
+        const res = await fetch('/mock/sessions');
+        if (!res.ok) return;
+        const sessions = await res.json();
+        renderSessionList(sessions);
+
+        // If an active session is selected, refresh its contents
+        if (activeSessionId) {
+          fetchSessionContents(activeSessionId);
+        }
+      } catch (err) {
+        console.error('Error fetching sessions:', err);
+      }
+    }
+
+    function renderSessionList(sessions) {
+      const listEl = document.getElementById('sessionList');
+      document.getElementById('sessionCount').textContent = sessions.length;
+
+      if (sessions.length === 0) {
+        listEl.innerHTML = '<li class="no-sessions">No active sessions</li>';
+        return;
+      }
+
+      listEl.innerHTML = '';
+      sessions.forEach(s => {
+        const li = document.createElement('li');
+        li.className = 'session-item' + (s.id === activeSessionId ? ' active' : '');
+        li.onclick = () => selectSession(s.id);
+
+        const statusBadge = s.connected
+          ? '<span class="badge badge-connected">Connected</span>'
+          : '<span class="badge badge-disconnected">Ended</span>';
+
+        li.innerHTML = `
+          <div class="session-item-header">
+            <span class="session-customer-name">${escapeHtml(s.customerName || 'Customer')}</span>
+            ${statusBadge}
+          </div>
+          <div class="session-last-msg">${escapeHtml(s.lastMessage || s.caption || 'New session')}</div>
+        `;
+        listEl.appendChild(li);
+      });
+    }
+
+    async function selectSession(sessionId) {
+      if (activeSessionId && activeSessionId !== sessionId) {
+        clearTimeout(typingTimer);
+        typingTimer = null;
+        sendAgentTyping(activeSessionId, false);
+        lastTypingPostTime = 0;
+      }
+
+      activeSessionId = sessionId;
+      document.getElementById('emptyState').style.display = 'none';
+      const activeChat = document.getElementById('activeChat');
+      activeChat.style.display = 'flex';
+
+      // Update UI active state in list
+      document.querySelectorAll('.session-item').forEach(el => el.classList.remove('active'));
+
+      // Notify server that agent has connected to this session
+      try {
+        await fetch(`/mock/sessions/${sessionId}/agent-connect`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ agentName: 'Srini Agent', firstName: 'Srini', lastName: '' })
+        });
+      } catch (e) {
+        console.warn('Agent connect notification failed:', e);
+      }
+
+      await fetchSessionContents(sessionId);
+      document.getElementById('agentInput').focus();
+    }
+
+    async function fetchSessionContents(sessionId) {
+      if (activeSessionId !== sessionId) return;
+
+      try {
+        const res = await fetch(`/mock/sessions/${sessionId}/contents`);
+        if (!res.ok) {
+          if (res.status === 404) {
+            activeSessionId = null;
+            document.getElementById('emptyState').style.display = 'flex';
+            document.getElementById('activeChat').style.display = 'none';
+          }
+          return;
+        }
+
+        const data = await res.json();
+        document.getElementById('chatCustomerName').textContent = data.customerName || 'Customer';
+        document.getElementById('chatSessionId').textContent = 'ID: ' + data.id;
+
+        const badge = document.getElementById('chatStatusBadge');
+        const btnDisconnect = document.getElementById('btnDisconnect');
+        const agentInput = document.getElementById('agentInput');
+        const btnSend = document.getElementById('btnSend');
+        const btnPushUrl = document.getElementById('btnPushUrl');
+
+        if (data.connected) {
+          badge.className = 'badge badge-connected';
+          badge.textContent = 'Connected';
+          btnDisconnect.disabled = false;
+          agentInput.disabled = false;
+          btnSend.disabled = false;
+          if (btnPushUrl) btnPushUrl.disabled = false;
+        } else {
+          badge.className = 'badge badge-disconnected';
+          badge.textContent = 'Disconnected';
+          btnDisconnect.disabled = true;
+          agentInput.disabled = true;
+          btnSend.disabled = true;
+          if (btnPushUrl) btnPushUrl.disabled = true;
+        }
+
+        // Typing indicator
+        const typingEl = document.getElementById('typingIndicator');
+        if (data.customerTyping && data.connected) {
+          typingEl.textContent = 'Customer is typing...';
+        } else {
+          typingEl.textContent = '';
+        }
+
+        renderMessages(data.contents);
+      } catch (err) {
+        console.error('Error fetching contents:', err);
+      }
+    }
+
+    function renderMessages(contents) {
+      const area = document.getElementById('messagesArea');
+      const shouldScroll = area.scrollTop + area.clientHeight >= area.scrollHeight - 50;
+
+      area.innerHTML = '';
+      (contents || []).forEach(msg => {
+        const row = document.createElement('div');
+        const type = msg.messageType || '';
+
+        if (type === 'CUSTOMER_MESSAGE') {
+          row.className = 'message-row customer';
+          row.innerHTML = `
+            <div>
+              <div class="message-sender">${escapeHtml(msg.from || 'Customer')}</div>
+              <div class="bubble customer">${escapeHtml(msg.content)}</div>
+            </div>
+          `;
+        } else if (type === 'AGENT_MESSAGE') {
+          row.className = 'message-row agent';
+          // strip html tag for bubble display or show clean content
+          const cleanText = msg.content ? msg.content.replace(/<[^>]*>?/gm, '') : '';
+          const agentName = (msg.agentFirstName ? msg.agentFirstName + ' ' + msg.agentLastName : 'Agent (Key: ' + msg.from + ')');
+          row.innerHTML = `
+            <div>
+              <div class="message-sender">${escapeHtml(agentName)}</div>
+              <div class="bubble agent">${escapeHtml(cleanText)}</div>
+            </div>
+          `;
+        } else if (type === 'AGENT_PUSH_URL') {
+          row.className = 'message-row agent';
+          const agentName = (msg.agentFirstName ? msg.agentFirstName + ' ' + msg.agentLastName : 'Agent (Key: ' + msg.from + ')');
+          const targetUrl = msg.pushedUrl || msg.content || '';
+          row.innerHTML = `
+            <div>
+              <div class="message-sender">${escapeHtml(agentName)} (Pushed URL)</div>
+              <div class="bubble agent" style="background-color: #0f766e; border: 1px solid #14b8a6;">
+                🔗 <a href="${escapeHtml(targetUrl)}" target="_blank" rel="noopener noreferrer" style="color: #5eead4; text-decoration: underline; font-weight: 500;">${escapeHtml(targetUrl)}</a>
+              </div>
+            </div>
+          `;
+        } else {
+          // SYSTEM_MESSAGE, CUSTOMER_DISCONNECT, AGENT_DISCONNECT
+          if (msg.content && msg.content.includes('Welcome to the contact center')) {
+            return; // Skip welcome message in agent console
+          }
+          row.className = 'message-row system';
+          row.innerHTML = `<div class="bubble system">${escapeHtml(msg.content)}</div>`;
+        }
+        area.appendChild(row);
+      });
+
+      if (shouldScroll) {
+        area.scrollTop = area.scrollHeight;
+      }
+    }
+
+    async function sendAgentMessage() {
+      const input = document.getElementById('agentInput');
+      const text = input.value.trim();
+      if (!text || !activeSessionId) return;
+
+      clearTimeout(typingTimer);
+      typingTimer = null;
+      sendAgentTyping(activeSessionId, false);
+      lastTypingPostTime = 0;
+
+      input.value = '';
+      try {
+        await fetch(`/mock/sessions/${activeSessionId}/agent-message`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text: text,
+            agentKey: '14',
+            firstName: 'Agent',
+            lastName: 'One'
+          })
+        });
+        await fetchSessionContents(activeSessionId);
+      } catch (err) {
+        console.error('Error sending agent message:', err);
+      }
+    }
+
+    // --- PUSH URL MODAL LOGIC ---
+    function pushAgentUrl() {
+      if (!activeSessionId) return;
+      const modal = document.getElementById('pushUrlModal');
+      const input = document.getElementById('pushUrlInput');
+      input.value = 'https://';
+      modal.classList.add('active');
+      setTimeout(() => {
+        input.focus();
+        input.setSelectionRange(input.value.length, input.value.length);
+      }, 100);
+    }
+
+    function closePushUrlModal() {
+      const modal = document.getElementById('pushUrlModal');
+      if (modal) modal.classList.remove('active');
+    }
+
+    function setPushUrl(url) {
+      const input = document.getElementById('pushUrlInput');
+      if (input) {
+        input.value = url;
+        input.focus();
+      }
+    }
+
+    function handlePushUrlKeyDown(event) {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        confirmPushUrl();
+      } else if (event.key === 'Escape') {
+        closePushUrlModal();
+      }
+    }
+
+    async function confirmPushUrl() {
+      if (!activeSessionId) return;
+      const input = document.getElementById('pushUrlInput');
+      let url = (input.value || '').trim();
+
+      if (!url || url === 'https://' || url === 'http://') {
+        showToast('Please enter a valid URL', 'error');
+        input.focus();
+        return;
+      }
+
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = 'https://' + url;
+      }
+
+      const btnConfirm = document.getElementById('btnConfirmPush');
+      btnConfirm.disabled = true;
+      btnConfirm.innerHTML = '<span>⏳</span> Pushing...';
+
+      try {
+        const res = await fetch(`/mock/sessions/${activeSessionId}/agent-push-url`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            url: url,
+            agentKey: '14',
+            firstName: 'Srini',
+            lastName: 'Agent'
+          })
+        });
+
+        if (res.ok) {
+          closePushUrlModal();
+          showToast('URL successfully pushed to customer!', 'success');
+          await fetchSessionContents(activeSessionId);
+        } else {
+          showToast('Failed to push URL to customer', 'error');
+        }
+      } catch (err) {
+        console.error('Error pushing URL:', err);
+        showToast('Error pushing URL: ' + err.message, 'error');
+      } finally {
+        btnConfirm.disabled = false;
+        btnConfirm.innerHTML = '<span>🔗</span> Push URL';
+      }
+    }
+
+    function handleInputKeyDown(event) {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        sendAgentMessage();
+      }
+    }
+
+    function handleAgentTyping() {
+      if (!activeSessionId) return;
+      const text = document.getElementById('agentInput').value;
+
+      if (!text || text.trim().length === 0) {
+        clearTimeout(typingTimer);
+        typingTimer = null;
+        sendAgentTyping(activeSessionId, false);
+        lastTypingPostTime = 0;
+        return;
+      }
+
+      const now = Date.now();
+      if (now - lastTypingPostTime > 2000) {
+        sendAgentTyping(activeSessionId, true);
+        lastTypingPostTime = now;
+      }
+
+      clearTimeout(typingTimer);
+      typingTimer = setTimeout(() => {
+        sendAgentTyping(activeSessionId, false);
+        lastTypingPostTime = 0;
+        typingTimer = null;
+      }, 3000);
+    }
+
+    // --- DISCONNECT MODAL LOGIC ---
+    function disconnectCurrentSession() {
+      if (!activeSessionId) return;
+      const custName = document.getElementById('chatCustomerName').textContent || 'Customer';
+      document.getElementById('disconnectCustomerName').textContent = custName;
+      const modal = document.getElementById('disconnectModal');
+      modal.classList.add('active');
+    }
+
+    function closeDisconnectModal() {
+      const modal = document.getElementById('disconnectModal');
+      if (modal) modal.classList.remove('active');
+    }
+
+    async function confirmDisconnect() {
+      if (!activeSessionId) return;
+      const btn = document.getElementById('btnConfirmDisconnect');
+      btn.disabled = true;
+      btn.textContent = 'Disconnecting...';
+
+      try {
+        const res = await fetch(`/mock/sessions/${activeSessionId}/agent-disconnect`, {
+          method: 'POST'
+        });
+        if (res.ok) {
+          closeDisconnectModal();
+          showToast('Session disconnected successfully', 'info');
+          await fetchSessionContents(activeSessionId);
+        } else {
+          showToast('Failed to disconnect session', 'error');
+        }
+      } catch (err) {
+        console.error('Error disconnecting session:', err);
+        showToast('Error disconnecting session: ' + err.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Disconnect';
+      }
+    }
+
+    // Close modals on global Escape key press
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closePushUrlModal();
+        closeDisconnectModal();
+      }
+    });
+
+    function escapeHtml(text) {
+      if (!text) return '';
+      return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    // Polling setup: every 2 seconds
+    fetchSessions();
+    setInterval(fetchSessions, 2000);
+  </script>
+</body>
+
+</html>
