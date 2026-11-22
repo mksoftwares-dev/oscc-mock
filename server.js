@@ -22,6 +22,11 @@ app.use((req, res, next) => {
 // Serve static files from /public
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Root route redirects to /agent.html
+app.get('/', (req, res) => {
+  res.redirect('/agent.html');
+});
+
 // In-memory data storage
 // tokens: Map<string, { expiresAt: number | null }>
 const tokens = new Map();
