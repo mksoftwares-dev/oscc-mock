@@ -323,6 +323,78 @@ function handleDeleteSession(req, res) {
 v1Router.delete('/sessions/:sessionId', handleDeleteSession);
 v1Router.delete('/sessions', handleDeleteSession);
 
+// ----------------------------------------------------
+// POST /v1/sessions/:sessionId/callme
+// Customer requests a call-back (Section 3.3.8 Call-me Function)
+// Body: { phoneNumber: "9876543210", customerName: "John" (optional) }
+// ----------------------------------------------------
+v1Router.post('/sessions/:sessionId/callme', (req, res) => {
+  const { sessionId } = req.params;
+  const session = sessions.get(sessionId);
+
+  if (!session) {
+    return res.status(404).json({ errorCode: 404, errorMsg: 'Session not found' });
+  }
+
+  if (!session.connected) {
+    return res.status(503).json({ errorCode: 503, errorMsg: 'Session is disconnected' });
+  }
+
+  const { phoneNumber, customerName } = req.body || {};
+
+  if (!phoneNumber || !String(phoneNumber).trim()) {
+    return res.status(400).json({ errorCode: 400, errorMsg: 'phoneNumber is required' });
+  }
+
+  const callmeId = crypto.randomUUID();
+
+  // Store callme request on session
+  session.callme = {
+    callmeId,
+    phoneNumber: String(phoneNumber).trim(),
+    customerName: customerName || session.customerName,
+    requestedAt: Date.now(),
+    acknowledged: false
+  };
+
+  // Add a system message in session contents so agent console can see it too
+  session.contents.push({
+    messageType: 'CALL_ME_REQUEST',
+    from: session.customerName,
+    agentFirstName: '',
+    agentLastName: '',
+    content: `Call-me request: ${String(phoneNumber).trim()}`,
+    formattedContent: `<p><strong>📞 Call-me request:</strong> ${String(phoneNumber).trim()}</p>`,
+    pushedUrl: '',
+    callmeId
+  });
+
+  console.log(`[Call-me] Session ${sessionId} | Phone: ${phoneNumber} | callmeId: ${callmeId}`);
+
+  return res.status(200).json({
+    success: true,
+    callmeId,
+    message: 'Call-me request received. An agent will call you shortly.'
+  });
+});
+
+// ----------------------------------------------------
+// DELETE (acknowledge) /v1/sessions/:sessionId/callme
+// Agent marks call-me request as handled
+// ----------------------------------------------------
+v1Router.delete('/sessions/:sessionId/callme', (req, res) => {
+  const { sessionId } = req.params;
+  const session = sessions.get(sessionId);
+
+  if (!session || !session.callme) {
+    return res.status(404).json({ errorCode: 404, errorMsg: 'No call-me request found' });
+  }
+
+  session.callme.acknowledged = true;
+  console.log(`[Call-me Acknowledged] Session ${sessionId} | callmeId: ${session.callme.callmeId}`);
+  return res.status(200).json({ success: true });
+});
+
 // Mount /v1 and /webinteractionsdk/v1
 app.use('/v1', v1Router);
 app.use('/webinteractionsdk/v1', v1Router);
@@ -496,6 +568,38 @@ mockRouter.post('/sessions/:id/agent-disconnect', (req, res) => {
     scheduleSessionCleanup(session.id);
   }
 
+  return res.status(200).json({ success: true });
+});
+
+// GET /mock/sessions/:id/callme — agent polls for call-me request
+mockRouter.get('/sessions/:id/callme', (req, res) => {
+  const session = sessions.get(req.params.id);
+  if (!session) {
+    return res.status(404).json({ error: 'Session not found' });
+  }
+
+  if (!session.callme) {
+    return res.status(200).json({ hasPendingCallme: false });
+  }
+
+  return res.status(200).json({
+    hasPendingCallme: !session.callme.acknowledged,
+    callmeId: session.callme.callmeId,
+    phoneNumber: session.callme.phoneNumber,
+    customerName: session.callme.customerName,
+    requestedAt: session.callme.requestedAt,
+    acknowledged: session.callme.acknowledged
+  });
+});
+
+// POST /mock/sessions/:id/callme-ack — agent acknowledges (marks as called)
+mockRouter.post('/sessions/:id/callme-ack', (req, res) => {
+  const session = sessions.get(req.params.id);
+  if (!session || !session.callme) {
+    return res.status(404).json({ error: 'No call-me request found' });
+  }
+  session.callme.acknowledged = true;
+  console.log(`[Call-me ACK] Session ${req.params.id} acknowledged by agent`);
   return res.status(200).json({ success: true });
 });
 

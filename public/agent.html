@@ -641,6 +641,16 @@
           <button class="btn-disconnect" id="btnDisconnect" onclick="disconnectCurrentSession()">Disconnect</button>
         </div>
 
+        <!-- Call-me Request Banner (hidden by default) -->
+        <div id="callmeBanner" style="display:none; align-items:center; gap:10px; background:#4c1d95; border:1.5px solid #7c3aed; border-radius:8px; margin:8px 12px 0 12px; padding:10px 14px; color:#ede9fe; font-size:0.9rem;">
+          <span style="font-size:1.3rem;">📞</span>
+          <div style="flex:1;">
+            <strong>Call-me Request!</strong>
+            <span id="callmeBannerPhone" style="margin-left:8px; font-weight:600; color:#c4b5fd;"></span>
+          </div>
+          <button onclick="acknowledgeCallme()" style="background:#7c3aed; color:#fff; border:none; border-radius:6px; padding:5px 12px; cursor:pointer; font-size:0.82rem; font-weight:600;">✅ Mark as Called</button>
+        </div>
+
         <div class="messages-area" id="messagesArea"></div>
         <div class="typing-indicator" id="typingIndicator"></div>
 
@@ -829,6 +839,10 @@
       const activeChat = document.getElementById('activeChat');
       activeChat.style.display = 'flex';
 
+      // Reset call-me banner on session switch
+      lastCallmeId = null;
+      document.getElementById('callmeBanner').style.display = 'none';
+
       // Update UI active state in list
       document.querySelectorAll('.session-item').forEach(el => el.classList.remove('active'));
 
@@ -939,6 +953,14 @@
               <div class="bubble agent" style="background-color: #0f766e; border: 1px solid #14b8a6;">
                 🔗 <a href="${escapeHtml(targetUrl)}" target="_blank" rel="noopener noreferrer" style="color: #5eead4; text-decoration: underline; font-weight: 500;">${escapeHtml(targetUrl)}</a>
               </div>
+            </div>
+          `;
+        } else if (type === 'CALL_ME_REQUEST') {
+          row.className = 'message-row system';
+          row.innerHTML = `
+            <div class="bubble system" style="background:#7c3aed;color:#ede9fe;border:1.5px solid #a78bfa;border-radius:10px;padding:10px 14px;text-align:center;">
+              📞 <strong>Call-me Request</strong><br>
+              Phone: <strong>${escapeHtml(msg.content.replace('Call-me request: ', ''))}</strong>
             </div>
           `;
         } else {
@@ -1161,6 +1183,42 @@
     // Polling setup: every 2 seconds
     fetchSessions();
     setInterval(fetchSessions, 2000);
+
+    // ---- Call-me polling: check every 3s when a session is active ----
+    let lastCallmeId = null;
+
+    async function pollCallme() {
+      if (!activeSessionId) return;
+      try {
+        const res = await fetch(`/mock/sessions/${activeSessionId}/callme`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const banner = document.getElementById('callmeBanner');
+        if (data.hasPendingCallme && data.callmeId !== lastCallmeId) {
+          lastCallmeId = data.callmeId;
+          document.getElementById('callmeBannerPhone').textContent = data.phoneNumber || '';
+          banner.style.display = 'flex';
+          showToast(`📞 Call-me request from ${data.customerName || 'Customer'}: ${data.phoneNumber}`, 'info', 8000);
+        } else if (!data.hasPendingCallme) {
+          banner.style.display = 'none';
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    async function acknowledgeCallme() {
+      if (!activeSessionId) return;
+      try {
+        await fetch(`/mock/sessions/${activeSessionId}/callme-ack`, { method: 'POST' });
+        document.getElementById('callmeBanner').style.display = 'none';
+        showToast('✅ Call-me marked as handled.', 'success', 3000);
+      } catch (e) {
+        showToast('Failed to acknowledge call-me.', 'error', 3000);
+      }
+    }
+
+    setInterval(pollCallme, 3000);
   </script>
 </body>
 
