@@ -660,6 +660,8 @@
           <button class="btn-send" id="btnSend" onclick="sendAgentMessage()">Send</button>
           <button class="btn-push-url" id="btnPushUrl" onclick="pushAgentUrl()" title="Push a URL to the customer">🔗
             Push URL</button>
+          <button class="btn-push-url" id="btnMakeCall" onclick="triggerMakeCall()" style="background:#7c3aed;" title="Request customer phone number (OpenScape 3.3.8 Make a Call)">📞
+            Make a Call</button>
         </div>
       </div>
     </div>
@@ -884,6 +886,7 @@
         const agentInput = document.getElementById('agentInput');
         const btnSend = document.getElementById('btnSend');
         const btnPushUrl = document.getElementById('btnPushUrl');
+        const btnMakeCall = document.getElementById('btnMakeCall');
 
         if (data.connected) {
           badge.className = 'badge badge-connected';
@@ -892,6 +895,7 @@
           agentInput.disabled = false;
           btnSend.disabled = false;
           if (btnPushUrl) btnPushUrl.disabled = false;
+          if (btnMakeCall) btnMakeCall.disabled = false;
         } else {
           badge.className = 'badge badge-disconnected';
           badge.textContent = 'Disconnected';
@@ -899,6 +903,7 @@
           agentInput.disabled = true;
           btnSend.disabled = true;
           if (btnPushUrl) btnPushUrl.disabled = true;
+          if (btnMakeCall) btnMakeCall.disabled = true;
         }
 
         // Typing indicator
@@ -1008,6 +1013,24 @@
     }
 
     // --- PUSH URL MODAL LOGIC ---
+    async function triggerMakeCall() {
+      if (!activeSessionId) return;
+      try {
+        const res = await fetch(`/mock/sessions/${activeSessionId}/agent-call-me`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ agentKey: 14 })
+        });
+        if (!res.ok) {
+          showToast('Failed to send Make a Call request.', 'error', 3000);
+          return;
+        }
+        showToast('📞 Call-Me prompt sent to customer! Waiting for their phone number...', 'info', 5000);
+      } catch (e) {
+        showToast('Network error sending Make a Call request.', 'error', 3000);
+      }
+    }
+
     function pushAgentUrl() {
       if (!activeSessionId) return;
       const modal = document.getElementById('pushUrlModal');

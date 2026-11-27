@@ -183,7 +183,8 @@ v1Router.post('/sessions', (req, res) => {
     createdAt: Date.now(),
     customerTypingUntil: 0,
     agentTypingUntil: 0,
-    agentTypingName: ''
+    agentTypingName: '',
+    pendingCallMeAgentKey: 0
   };
 
   sessions.set(sessionId, session);
@@ -225,11 +226,17 @@ function handleGetContents(req, res) {
     }
   }
 
+  const callMeAgentKey = session.pendingCallMeAgentKey || 0;
+  if (callMeAgentKey > 0) {
+    // Per OpenScape 3.3.8: return agentKey once, then reset to 0 on subsequent polls
+    session.pendingCallMeAgentKey = 0;
+  }
+
   return res.status(200).json({
     sessionId: session.id,
     content: contentSlice,
     pushUrl: '',
-    callMeAgentKey: 0,
+    callMeAgentKey: callMeAgentKey,
     newIndexKey: newIndexKey,
     whoIsTyping: whoIsTyping,
     redirectUrl: '',
@@ -324,11 +331,11 @@ v1Router.delete('/sessions/:sessionId', handleDeleteSession);
 v1Router.delete('/sessions', handleDeleteSession);
 
 // ----------------------------------------------------
-// POST /v1/sessions/:sessionId/callme
-// Customer requests a call-back (Section 3.3.8 Call-me Function)
-// Body: { phoneNumber: "9876543210", customerName: "John" (optional) }
+// POST /v1/sessions/:sessionId/call-me (and /callme alias)
+// Customer sends phone number for Call-Me (Section 3.3.8 / 4.3.4)
+// Body: { agentKey: 14, phoneNumber: "554180911597" }
 // ----------------------------------------------------
-v1Router.post('/sessions/:sessionId/callme', (req, res) => {
+function handleCallMePost(req, res) {
   const { sessionId } = req.params;
   const session = sessions.get(sessionId);
 
@@ -340,17 +347,19 @@ v1Router.post('/sessions/:sessionId/callme', (req, res) => {
     return res.status(503).json({ errorCode: 503, errorMsg: 'Session is disconnected' });
   }
 
-  const { phoneNumber, customerName } = req.body || {};
+  const { phoneNumber, customerName, agentKey } = req.body || {};
 
   if (!phoneNumber || !String(phoneNumber).trim()) {
     return res.status(400).json({ errorCode: 400, errorMsg: 'phoneNumber is required' });
   }
 
   const callmeId = crypto.randomUUID();
+  const resolvedAgentKey = Number(agentKey) || 14;
 
   // Store callme request on session
   session.callme = {
     callmeId,
+    agentKey: resolvedAgentKey,
     phoneNumber: String(phoneNumber).trim(),
     customerName: customerName || session.customerName,
     requestedAt: Date.now(),
@@ -369,14 +378,18 @@ v1Router.post('/sessions/:sessionId/callme', (req, res) => {
     callmeId
   });
 
-  console.log(`[Call-me] Session ${sessionId} | Phone: ${phoneNumber} | callmeId: ${callmeId}`);
+  console.log(`[Call-me] Session ${sessionId} | AgentKey: ${resolvedAgentKey} | Phone: ${phoneNumber} | callmeId: ${callmeId}`);
 
   return res.status(200).json({
     success: true,
     callmeId,
+    agentKey: resolvedAgentKey,
     message: 'Call-me request received. An agent will call you shortly.'
   });
-});
+}
+
+v1Router.post('/sessions/:sessionId/call-me', handleCallMePost);
+v1Router.post('/sessions/:sessionId/callme', handleCallMePost);
 
 // ----------------------------------------------------
 // DELETE (acknowledge) /v1/sessions/:sessionId/callme
@@ -569,6 +582,22 @@ mockRouter.post('/sessions/:id/agent-disconnect', (req, res) => {
   }
 
   return res.status(200).json({ success: true });
+});
+
+// POST /mock/sessions/:id/agent-call-me — agent clicks "Make a Call" (OpenScape 3.3.8)
+mockRouter.post('/sessions/:id/agent-call-me', (req, res) => {
+  const session = sessions.get(req.params.id);
+  if (!session) {
+    return res.status(404).json({ error: 'Session not found' });
+  }
+  if (!session.connected) {
+    return res.status(400).json({ error: 'Session is disconnected' });
+  }
+
+  const agentKey = Number(req.body?.agentKey) || 14;
+  session.pendingCallMeAgentKey = agentKey;
+  console.log(`[Make a Call] Agent ${agentKey} triggered Call-Me prompt for session ${req.params.id}`);
+  return res.status(200).json({ success: true, callMeAgentKey: agentKey });
 });
 
 // GET /mock/sessions/:id/callme — agent polls for call-me request
